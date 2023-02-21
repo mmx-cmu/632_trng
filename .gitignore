@@ -1,0 +1,11 @@
+*.rbf
+csrc/
+db/
+DVEfiles/
+incremental_db/
+inter.vpd/
+output_files/
+simulation/
+simv*
+*.key
+*.bak
