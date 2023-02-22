@@ -1,7 +1,7 @@
 `default_nettype none
 
 module uart_clk_gen
-  #(parameter BASE_CLK = 50000000, BAUD=115200)
+  #(parameter BASE_CLK = 25000000, BAUD=115200)
   (input  logic clk, reset_n,
    output logic clk2);
 
@@ -9,7 +9,7 @@ module uart_clk_gen
 
   always_ff @(posedge clk, negedge reset_n) begin
     if (~reset_n) begin
-      counter <= BASE_CLK/BAUD-1;
+      counter <= 8'd433; //BASE_CLK/BAUD-1;
     end else begin
       counter <= counter - 1;
     end
@@ -20,7 +20,7 @@ module uart_clk_gen
 endmodule : uart_clk_gen
 
 module uart_ctl
-  #(parameter BASE_CLK = 50000000, BAUD=115200)
+  #(parameter BASE_CLK = 25000000, BAUD=115200)
   (input  logic       clk, reset_n,
    input  logic [7:0] bytes,
    input  logic       send,

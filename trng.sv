@@ -185,6 +185,7 @@ module trng
   (output logic [9:0]   LEDR,
    input  logic         CLOCK_50,
 	 input  logic [2:0]   KEY,
+	 input  logic [7:0]   SW,
 	 output logic [6:0]   HEX3, HEX2, HEX1, HEX0,
 	 inout  logic [27:26] GPIO_0
 	);
@@ -256,7 +257,8 @@ module trng
 
   // TODO: uart RX
   assign GPIO_0[27] = 1'bz;
-  uart_ctl uart_module(.clk(CLOCK_50), .reset_n(1'b1), .bytes(8'h0a),
+  uart_ctl #(.BASE_CLK(25000000), .BAUD(115200))
+      uart_module(.clk(CLOCK_50), .reset_n(1'b1), .bytes(SW[7:0]),
                        .TX(GPIO_0[26]), .done, .send);
   assign LEDR[9:8] = {done, send};
 
