@@ -9,3 +9,6 @@ simulation/
 simv*
 *.key
 *.bak
+*.bin
+*.png
+data.txt
