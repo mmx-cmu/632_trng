@@ -257,8 +257,7 @@ module trng
 
   // TODO: uart RX
   assign GPIO_0[27] = 1'bz;
-  uart_ctl #(.BASE_CLK(25000000), .BAUD(115200))
-      uart_module(.clk(CLOCK_50), .reset_n(1'b1), .bytes(SW[7:0]),
+  uart_ctl uart_module(.clk(CLOCK_50), .reset_n(1'b1), .bits(SW[7:0]),
                        .TX(GPIO_0[26]), .done, .send);
   assign LEDR[9:8] = {done, send};
 
