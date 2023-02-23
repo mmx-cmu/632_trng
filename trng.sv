@@ -28,18 +28,31 @@ module oscillator
 endmodule : oscillator
 
 module trng_device
-  #(parameter MAX_N_A = 35, MAX_N_B = 1750)
-  (input  logic [$clog2(MAX_N_A)-1:0] nA,
-   input  logic [$clog2(MAX_N_B)-1:0] nB,
+  #(parameter MAX_N_A = 250, MAX_N_B = 1750, numFreqs = 11)
+  (input  logic [numFreqs-1:0][$clog2(MAX_N_B)-1:0] nVal,
    input   logic                      reset_n,
    output logic                       out
   );
 
-  logic ff_clk, ff_d, ff_q;
- 
-  oscillator #(.MAX_N(MAX_N_A)) hf(.n(nA), .out(ff_d), .*);
 
-  oscillator #(.MAX_N(MAX_N_B)) lf(.n(nB), .out(ff_clk), .*);
+  logic ff_clk, ff_d, ff_q;
+
+  logic [numFreqs-1:0] ffVal;
+ 
+  // fasts
+  genvar osc_i;
+  generate
+for (osc_i = 1; osc_i < numFreqs; osc_i ++) begin : gen_oscs
+ oscillator #(.MAX_N(MAX_N_B)) (.n(nVal[osc_i]), .out(ffVal[osc_i]), .*);
+end
+  endgenerate
+ 
+  assign ff_d = ^ffVal;
+
+
+  // slow
+  oscillator #(.MAX_N(MAX_N_A)) lf(.n(nVal[0]), .out(ff_clk), .*);
+
 
   always_ff @(posedge ff_clk, negedge reset_n) begin
     if (~reset_n) begin
@@ -69,7 +82,7 @@ module clk_div(input logic fclk, output logic sclk, input logic reset_n);
 endmodule : clk_div
 
 module trng_control
-  #(parameter MAX_N_A = 35, MAX_N_B = 1750, NUM_BITS = 8)
+  #(parameter MAX_N_A = 250, MAX_N_B = 1750, NUM_BITS = 8)
   (input logic                       clk, reset_n,
    input logic [$clog2(MAX_N_A)-1:0] nA,
    input logic [$clog2(MAX_N_B)-1:0] nB,
@@ -103,12 +116,12 @@ module trng_control
     GEN_BITS,
     DONE
   } cstate, nstate;
-  
+ 
   always_comb begin
     nstate = cstate;
     sr_en = 1'b0;
     ready = 1'b0;
-    
+   
     case (cstate)
       WAIT_GO: begin
         if (go) begin
@@ -184,16 +197,16 @@ endmodule : BinValtoSevenSegment
 module trng
   (output logic [9:0]   LEDR,
    input  logic         CLOCK_50,
-	 input  logic [2:0]   KEY,
-	 input  logic [7:0]   SW,
-	 output logic [6:0]   HEX3, HEX2, HEX1, HEX0,
-	 inout  logic [27:26] GPIO_0
-	);
+   input  logic [2:0]   KEY,
+   input  logic [7:0]   SW,
+   output logic [6:0]   HEX3, HEX2, HEX1, HEX0,
+   inout  logic [27:26] GPIO_0
+);
   logic go, ready, send, done;
   logic [7:0] rng;
   logic clk_slower;
   always_ff @(posedge CLOCK_50) begin
-	clk_slower <= ~clk_slower;
+clk_slower <= ~clk_slower;
   end
   trng_control trng_ctrl(.clk(clk_slower), .reset_n(1'b1), .nA('d9), .nB('d47), .go,
                          .ready, .rng, .trng_out(pin));
@@ -203,7 +216,30 @@ module trng
 
   logic kb3, kb4, pin;
   // old: 9 and 47
-  trng_device DUT (.nA('d17), .nB('d853), .out(pin), .reset_n(1'b1));
+  // newer: 17 and 853
+//  trng_device DUT (.nA('d17), .nB('d451), .nC('d283), .nD('d853), .out(pin), .reset_n(1'b1));
+
+  localparam numFreqs = 11;
+  logic[numFreqs-1:0][$clog2(1750)-1:0] osciVals;
+  // 17 83: 83%
+  assign osciVals[0] = 17; // slow
+  assign osciVals[1] = 83; //83
+  assign osciVals[2] = 167; //173
+  assign osciVals[3] = 257;
+  assign osciVals[4] = 337;
+  assign osciVals[5] = 421;
+  assign osciVals[6] = 509;
+  assign osciVals[7] = 593;
+  assign osciVals[8] = 677;
+  assign osciVals[9] = 761;
+  assign osciVals[10] = 853;
+//  assign osciVals[11] = 17;
+//  assign osciVals[12] = 17;
+//  assign osciVals[13] = 17;
+//  assign osciVals[14] = 17;
+//  assign osciVals[15] = 17;
+ 
+  trng_device DUT (.nVal(osciVals), .out(pin), .reset_n(1'b1));
   logic [7:0] data;
   always_ff @(posedge CLOCK_50) begin
     kb3 <= KEY[1];
@@ -233,7 +269,7 @@ module trng
     nstate = cstate;
     go = 1'b0;
     send = 1'b0;
-    
+   
     case (cstate)
       WAIT_TRNG: begin
         go = 1'b1;
