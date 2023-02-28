@@ -4,7 +4,7 @@ from math import ceil
 import sys
 
 serialPort = serial.Serial(
-    port='/dev/ttyUSB0',
+    port='COM9',
     baudrate=115200,
     bytesize=8,
     parity=serial.PARITY_NONE,

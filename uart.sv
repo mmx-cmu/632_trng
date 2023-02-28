@@ -1,5 +1,7 @@
 `default_nettype none
 
+//make sure we only send bits out at the agreed baudrate
+//send a bit every 434 cycles (115200 bits/s)
 module uart_clk_gen
   #(parameter BASE_CLK = 50000000, BAUD=115200)
   (input  logic clk, reset_n,
@@ -71,12 +73,6 @@ module uart_ctl
           nstate = SEND_BIT0;
         end
       end
-      SEND_BIT0: begin
-        TX = bits[0];
-        if (uclk) begin
-          nstate = SEND_BIT1;
-        end
-      end
       SEND_STOP: begin
         TX = 1'b1;
         if (uclk) begin
@@ -88,6 +84,12 @@ module uart_ctl
         TX = 1'b1;
         if (~send) begin
           nstate = WAIT_GO;
+        end
+      end
+      SEND_BIT0: begin
+        TX = bits[0];
+        if (uclk) begin
+          nstate = SEND_BIT1;
         end
       end
       SEND_BIT1: begin
