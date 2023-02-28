@@ -28,27 +28,30 @@ module oscillator
 endmodule : oscillator
 
 module trng_device
-  #(parameter MAX_N_A = 250, MAX_N_B = 1750, numFreqs = 11)
+  #(parameter MAX_N_A = 250, MAX_N_B = 1750, numFreqs = 2)
   (input  logic [numFreqs-1:0][$clog2(MAX_N_B)-1:0] nVal,
    input   logic                      reset_n,
+	input logic 								CLOCK_50,
    output logic                       out
   );
 
 
-  logic ff_clk, ff_d, ff_q;
+  logic ff_clk, ff_q, xor_out1, xor_out2;
+  logic ff_out1, ff_out2;
+  logic sample, valid;
 
   logic [numFreqs-1:0] ffVal;
- 
+  
   // fasts
   genvar osc_i;
   generate
-for (osc_i = 1; osc_i < numFreqs; osc_i ++) begin : gen_oscs
- oscillator #(.MAX_N(MAX_N_B)) (.n(nVal[osc_i]), .out(ffVal[osc_i]), .*);
-end
+		for (osc_i = 1; osc_i < numFreqs; osc_i ++) begin : gen_oscs
+		  oscillator #(.MAX_N(MAX_N_B)) (.n(nVal[osc_i]), .out(ffVal[osc_i]), .*);
+		end
   endgenerate
- 
-  assign ff_d = ^ffVal;
-
+  
+  // first XOR
+  assign xor_out1 = ^ffVal;
 
   // slow
   oscillator #(.MAX_N(MAX_N_A)) lf(.n(nVal[0]), .out(ff_clk), .*);
@@ -58,7 +61,7 @@ end
     if (~reset_n) begin
       ff_q <= 1'b0;
     end else begin
-      ff_q <= ff_d;
+      ff_q <= xor_out1;
     end
   end
 
@@ -84,8 +87,6 @@ endmodule : clk_div
 module trng_control
   #(parameter MAX_N_A = 250, MAX_N_B = 1750, NUM_BITS = 8)
   (input logic                       clk, reset_n,
-   input logic [$clog2(MAX_N_A)-1:0] nA,
-   input logic [$clog2(MAX_N_B)-1:0] nB,
    input logic                       go,
    output logic                      ready,
    output logic       [NUM_BITS-1:0] rng,
@@ -98,12 +99,13 @@ module trng_control
   //              .MAX_N_B(MAX_N_B)) trng(.nA, .nB, .out(trng_out), .reset_n);
 
   /* shift register + counter for NUM_BITS bits */
-  logic sr_en;
+  logic sr_en, staging_bit;
   logic [$clog2(NUM_BITS):0] bits_generated;
   always_ff @(posedge clk, negedge reset_n) begin
     if (~reset_n) begin
       rng <= {NUM_BITS{1'b0}};
       bits_generated <= {$clog2(NUM_BITS){1'b0}};
+		staging_bit <= 1'b0;
     end else if (sr_en) begin
       rng <= {rng[NUM_BITS-2:0], trng_out};
       bits_generated <= bits_generated + 1;
@@ -204,11 +206,20 @@ module trng
 );
   logic go, ready, send, done;
   logic [7:0] rng;
-  logic clk_slower;
+  logic clk_slower, clk_slower1, clk_slower2, clk_slower3;
   always_ff @(posedge CLOCK_50) begin
 clk_slower <= ~clk_slower;
   end
-  trng_control trng_ctrl(.clk(clk_slower), .reset_n(1'b1), .nA('d9), .nB('d47), .go,
+  always_ff @(posedge clk_slower) begin
+	clk_slower1 <= ~clk_slower1;
+  end
+  always_ff @(posedge clk_slower1) begin
+	clk_slower2 <= ~clk_slower2;
+  end
+  always_ff @(posedge clk_slower2) begin
+	clk_slower3 <= ~clk_slower3;
+  end
+  trng_control trng_ctrl(.clk(clk_slower3), .reset_n(1'b1), .go,
                          .ready, .rng, .trng_out(pin));
 
   BinValtoSevenSegment bvss0(.val(rng[3:0]), .segment(HEX0)),
@@ -218,28 +229,31 @@ clk_slower <= ~clk_slower;
   // old: 9 and 47
   // newer: 17 and 853
 //  trng_device DUT (.nA('d17), .nB('d451), .nC('d283), .nD('d853), .out(pin), .reset_n(1'b1));
-
-  localparam numFreqs = 11;
+	
+  localparam numFreqs = 2;
   logic[numFreqs-1:0][$clog2(1750)-1:0] osciVals;
-  // 17 83: 83%
-  assign osciVals[0] = 17; // slow
-  assign osciVals[1] = 83; //83
-  assign osciVals[2] = 167; //173
-  assign osciVals[3] = 257;
-  assign osciVals[4] = 337;
-  assign osciVals[5] = 421;
-  assign osciVals[6] = 509;
-  assign osciVals[7] = 593;
-  assign osciVals[8] = 677;
-  assign osciVals[9] = 761;
-  assign osciVals[10] = 853;
+  
+  
+  // 517, 21 --> 49.98
+  
+  assign osciVals[0] = 517; // slow (longest)
+  assign osciVals[1] = 21; 
+//  assign osciVals[2] = 103;
+//  assign osciVals[3] = 53;
+//  assign osciVals[4] = 337;
+//  assign osciVals[5] = 421;
+//  assign osciVals[6] = 509;
+//  assign osciVals[7] = 593;
+//  assign osciVals[8] = 677;
+//  assign osciVals[9] = 761;
+//  assign osciVals[10] = 853;
 //  assign osciVals[11] = 17;
 //  assign osciVals[12] = 17;
 //  assign osciVals[13] = 17;
 //  assign osciVals[14] = 17;
 //  assign osciVals[15] = 17;
- 
-  trng_device DUT (.nVal(osciVals), .out(pin), .reset_n(1'b1));
+
+  trng_device #(.numFreqs(numFreqs)) DUT (.nVal(osciVals), .out(pin), .reset_n(1'b1), .CLOCK_50(CLOCK_50));
   logic [7:0] data;
   always_ff @(posedge CLOCK_50) begin
     kb3 <= KEY[1];
