@@ -45,14 +45,13 @@ module trng_device
   genvar osc_i;
   generate
   for (osc_i = 0; osc_i < numSources; osc_i ++) begin : gen_oscs
-    oscillator #(.MAX_N(MAX_N_A)) (.n(sampleLength[osc_i]), .out(ffVal[osc_i]), .*);
+    oscillator #(.MAX_N(MAX_N_A)) (.n(sourceLength[osc_i]), .out(ffVal[osc_i]), .*);
   end
   endgenerate
 
   // slow oscillator (long chain of inverters)
   oscillator #(.MAX_N(MAX_N_B)) lf(.n(sampleLength), .out(ff_clk), .*);
  
-  //TO-DO: update this when using numFreqs > 2
   assign ff_d = ffVal;
 
   //FF for sampling
@@ -107,9 +106,10 @@ module byte_gen_ctrl
     if (~reset_n) begin
       rng_byte_out <= {NUM_BITS{1'b0}};
       bits_generated <= {$clog2(NUM_BITS){1'b0}};
-		last_bit <= 1'b0;
+		last_bit <= 1'b1;
     end 
     else if (sr_en) begin
+		
 		if (last_bit != trng_out) begin
 			//left direction shift, so save lower-seven bits of rng_byte_out
 			rng_byte_out <= {rng_byte_out[NUM_BITS-2:0], trng_out};
@@ -117,6 +117,11 @@ module byte_gen_ctrl
 		end
 		
 		last_bit <= trng_out;
+		
+		/*
+		rng_byte_out <= {rng_byte_out[NUM_BITS-2:0], trng_out};
+		bits_generated <= bits_generated + 1;
+		*/
     end
   end
 
@@ -125,7 +130,7 @@ module byte_gen_ctrl
   //after 8 bits have been saved in the register, assert ready so that it can be
   //displayed on the seven-segment displays, and transmitted over UART
   enum logic [1:0] {
-    WAIT_valid,
+    WAIT_VALID,
     GEN_BITS,
     DONE
   } cstate, nstate;
@@ -136,7 +141,7 @@ module byte_gen_ctrl
     ready = 1'b0;
    
     case (cstate)
-      WAIT_valid: begin
+      WAIT_VALID: begin
         if (valid) begin
           nstate = GEN_BITS;
         end
@@ -150,7 +155,7 @@ module byte_gen_ctrl
       DONE: begin
         ready = 1'b1;
         if (~valid) begin
-          nstate = WAIT_valid;
+          nstate = WAIT_VALID;
         end
       end
     endcase
@@ -158,7 +163,7 @@ module byte_gen_ctrl
 
   always_ff @(posedge clk, negedge reset_n) begin
     if (!reset_n) 
-      cstate <= WAIT_valid;
+      cstate <= WAIT_VALID;
     else 
       cstate <= nstate;
   end
@@ -237,19 +242,16 @@ module trng
   logic kb3, kb4, pin;
  
   localparam numSources = 1;
-  //localparam MAX_SOURCE_LENGTH = 70;
-  //localparam MAX_SAMPLE_LENGTH = 3500;
   
-  localparam MAX_SOURCE_LENGTH = 21;
-  localparam MAX_SAMPLE_LENGTH = 517;
-
-  //logic[numFreqs-1:0][$clog2(MAX_SAMPLE_LENGTH)-1:0] osciVals;
+  //ALWAYS KEEP THE MAXES AT LEAST 1 ABOVE THE SOURCE AND SAMPLE LENGTH
+  localparam MAX_SOURCE_LENGTH = 70;
+  localparam MAX_SAMPLE_LENGTH = 3500;
   
   logic [6:0] sourceLength;
   logic [12:0] sampleLength;
   
-  assign sourceLength = 21;
-  assign sampleLength = 517;
+  assign sourceLength = 7;
+  assign sampleLength = 349;
   
   //CREATE DUT
   trng_device #(.numSources(1), .MAX_N_A(MAX_SOURCE_LENGTH), .MAX_N_B(MAX_SAMPLE_LENGTH)) 
