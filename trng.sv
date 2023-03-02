@@ -258,8 +258,8 @@ module trng
   localparam numSources = 1;
   
   //ALWAYS KEEP THE MAXES AT LEAST 1 ABOVE THE SOURCE AND SAMPLE LENGTH
-  localparam MAX_SOURCE_LENGTH = 70;
-  localparam MAX_SAMPLE_LENGTH = 3500;
+  localparam MAX_SOURCE_LENGTH = 22;
+  localparam MAX_SAMPLE_LENGTH = 51;
   
   logic [6:0] sourceLength;
   logic [12:0] sampleLength;
