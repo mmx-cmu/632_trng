@@ -7,14 +7,15 @@ module oscillator
    output logic                     out);
 
   logic [MAX_N-1:0] invs /* synthesis keep */;
+  logic [MAX_N-1:0] invs_internal /* synthesis keep */; 
 
   genvar i;
   generate
     for (i = 0; i < MAX_N-1; i++) begin : inverters
       /* put two inverters at a time so invs[i] = invs[i+1] always
        * (modulo the delay) */
-      not #5 gate1(invs[i]);
-      not #5 gate2(invs[i+1]);
+      not #5 gate1(invs_internal[i], invs[i]); 
+      not #5 gate2(invs[i+1], invs_internal[i]); 
     end
   endgenerate
 
@@ -28,8 +29,9 @@ endmodule : oscillator
 
 
 module trng_device
-  #(parameter MAX_N_A = 70, MAX_N_B = 3500, numFreqs = 2) //numFreqs count includes sample freq
-  (input  logic [numFreqs-1:0][$clog2(MAX_N_B)-1:0] nVal,
+  #(parameter MAX_N_A = 70, MAX_N_B = 3500, numSources = 1) //numFreqs count includes sample freq
+  (input  logic [$clog2(MAX_N_B)-1:0] sampleLength,
+   input logic [numSources-1:0][$clog2(MAX_N_A)-1:0] sourceLength,
    input   logic                      reset_n,
    output logic                       out
   );
@@ -37,21 +39,21 @@ module trng_device
   logic ff_clk, ff_d, ff_q;
 
   //ffVal should be one bit when numFreqs = 2
-  logic [numFreqs-2:0] ffVal;
+  logic [numSources-1:0] ffVal;
  
   // source oscillators (short chain of inverters)
   genvar osc_i;
   generate
-  for (osc_i = 1; osc_i < numFreqs; osc_i ++) begin : gen_oscs
-    oscillator #(.MAX_N(MAX_N_A)) (.n(nVal[osc_i]), .out(ffVal[osc_i]), .*);
+  for (osc_i = 0; osc_i < numSources; osc_i ++) begin : gen_oscs
+    oscillator #(.MAX_N(MAX_N_A)) (.n(sampleLength[osc_i]), .out(ffVal[osc_i]), .*);
   end
   endgenerate
 
   // slow oscillator (long chain of inverters)
-  oscillator #(.MAX_N(MAX_N_B)) lf(.n(nVal[0]), .out(ff_clk), .*);
+  oscillator #(.MAX_N(MAX_N_B)) lf(.n(sampleLength), .out(ff_clk), .*);
  
   //TO-DO: update this when using numFreqs > 2
-  assign ff_d = ffVal[1];
+  assign ff_d = ffVal;
 
   //FF for sampling
   always_ff @(posedge ff_clk, negedge reset_n) begin
@@ -88,26 +90,33 @@ endmodule : clk_div
 module byte_gen_ctrl
   #(parameter NUM_BITS = 8)
   (input logic                       clk, reset_n,
-   input  logic                      trng_out
+   input  logic                      trng_out, 
    input logic                       valid,
 
    output logic                      ready,
-   output logic       [NUM_BITS-1:0] rng_byte_out,
+   output logic       [NUM_BITS-1:0] rng_byte_out
   );
 
   /* shift register enable signal + counter for NUM_BITS bits */
   logic sr_en;
   logic [$clog2(NUM_BITS):0] bits_generated;
+  
+  logic last_bit;
 
   always_ff @(posedge clk, negedge reset_n) begin
     if (~reset_n) begin
       rng_byte_out <= {NUM_BITS{1'b0}};
       bits_generated <= {$clog2(NUM_BITS){1'b0}};
+		last_bit <= 1'b0;
     end 
     else if (sr_en) begin
-      //left direction shift, so save lower-seven bits of rng_byte_out
-      rng_byte_out <= {rng_byte_out[NUM_BITS-2:0], trng_out};
-      bits_generated <= bits_generated + 1;
+		if (last_bit != trng_out) begin
+			//left direction shift, so save lower-seven bits of rng_byte_out
+			rng_byte_out <= {rng_byte_out[NUM_BITS-2:0], trng_out};
+			bits_generated <= bits_generated + 1;
+		end
+		
+		last_bit <= trng_out;
     end
   end
 
@@ -202,7 +211,7 @@ module BinValtoSevenSegment
 endmodule : BinValtoSevenSegment
 
 module trng
-  (output logic [9:0]   LEDR,
+  (output logic [7:0]   LEDR,
    input  logic         CLOCK_50,
    input  logic [2:0]   KEY,
    input  logic [7:0]   SW,
@@ -227,14 +236,24 @@ module trng
 
   logic kb3, kb4, pin;
  
-  localparam numFreqs = 2;
-  localparam MAX_SOURCE_LENGTH = 70;
-  localparam MAX_SAMPLE_LENGTH = 3500;
+  localparam numSources = 1;
+  //localparam MAX_SOURCE_LENGTH = 70;
+  //localparam MAX_SAMPLE_LENGTH = 3500;
+  
+  localparam MAX_SOURCE_LENGTH = 21;
+  localparam MAX_SAMPLE_LENGTH = 517;
 
-  logic[numFreqs-1:0][$clog2(MAX_SAMPLE_LENGTH)-1:0] osciVals;
+  //logic[numFreqs-1:0][$clog2(MAX_SAMPLE_LENGTH)-1:0] osciVals;
+  
+  logic [6:0] sourceLength;
+  logic [12:0] sampleLength;
+  
+  assign sourceLength = 21;
+  assign sampleLength = 517;
   
   //CREATE DUT
-  trng_device DUT (.nVal(osciVals), .out(pin), .reset_n(1'b1));
+  trng_device #(.numSources(1), .MAX_N_A(MAX_SOURCE_LENGTH), .MAX_N_B(MAX_SAMPLE_LENGTH)) 
+					DUT (.sourceLength(sourceLength), .sampleLength(sampleLength), .out(pin), .reset_n(1'b1));
 
   logic [7:0] data;
   always_ff @(posedge CLOCK_50) begin
