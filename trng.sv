@@ -258,14 +258,14 @@ module trng
   localparam numSources = 1;
   
   //ALWAYS KEEP THE MAXES AT LEAST 1 ABOVE THE SOURCE AND SAMPLE LENGTH
-  localparam MAX_SOURCE_LENGTH = 22;
-  localparam MAX_SAMPLE_LENGTH = 51;
+  localparam MAX_SOURCE_LENGTH = 12;
+  localparam MAX_SAMPLE_LENGTH = 54;
   
   logic [6:0] sourceLength;
   logic [12:0] sampleLength;
   
-  assign sourceLength = 21;
-  assign sampleLength = 517;
+  assign sourceLength = 11;
+  assign sampleLength = 53;
   
   //CREATE DUT
   trng_device #(.numSources(1), .MAX_N_A(MAX_SOURCE_LENGTH), .MAX_N_B(MAX_SAMPLE_LENGTH)) 
